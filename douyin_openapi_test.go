@@ -1,6 +1,7 @@
 package douyin_openapi
 
 import (
+	"encoding/json"
 	"fmt"
 	accessToken "github.com/HeartGarlic/douyin-openapi/access-token"
 	"github.com/HeartGarlic/douyin-openapi/cache"
@@ -30,7 +31,7 @@ func init() {
 	OpenApi = NewDouYinOpenApi(DouYinOpenApiConfig{
 		AppId:     AppId,
 		AppSecret: AppSecret,
-		IsSandbox: true,
+		IsSandbox: false,
 		Token:     Token,
 		Salt:      Salt,
 	})
@@ -149,4 +150,40 @@ func TestDouYinOpenApi_CreateRefund(t *testing.T) {
 	}
 	t.Logf("got a value %+v", gotCreateRefundResponse)
 	return
+}
+
+// 订单同步脚本
+func TestDouYinOpenApi_OrderV2Push(t *testing.T) {
+	token, err := OpenApi.Config.AccessToken.GetAccessToken()
+	fmt.Println(token, err)
+	var itemList []ItemList
+	itemList = append(itemList, ItemList{
+		ItemCode: "707",
+		Img:      "https://image.jxyue.cn/uploads/images/64681677037544_.pic.jpg",
+		Title:    "爽豆充值",
+		SubTitle: "爽豆充值",
+		Amount:   1,
+		Price:    1,
+	})
+	orderDetail := OrderDetailParams{
+		OrderId:    "202302221418290650310502",
+		CreateTime: 1677046709,
+		Status:     "已超时",
+		Amount:     1,
+		TotalPrice: 1,
+		DetailUrl:  "/",
+		ItemList:   itemList,
+	}
+	detailStr, err := json.Marshal(orderDetail)
+	normal := OrderV2PushParams{
+		AccessToken: token,
+		AppName:     "douyin",
+		OpenId:      "_000uifBomWB0iSbZksj-sWpSiNun5BS_UDv",
+		OrderStatus: 0,
+		OrderType:   0,
+		UpdateTime:  1677046709,
+		OrderDetail: string(detailStr),
+	}
+	res, err := OpenApi.OrderV2Push(normal)
+	fmt.Printf("res: %+v err: %+v", res, err)
 }
