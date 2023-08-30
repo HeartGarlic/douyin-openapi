@@ -22,6 +22,9 @@ type AccessToken interface {
 	GetAccessToken() (string, error) // 获取token
 }
 
+// accessTokenLock 初始化全局锁防止并发获取token
+var accessTokenLock = new(sync.Mutex)
+
 // DefaultAccessToken 默认的token管理类
 type DefaultAccessToken struct {
 	AppId               string      // app_id	string	是	小程序的 app_id
@@ -44,7 +47,7 @@ func NewDefaultAccessToken(appId, appSecret string, cache cache.Cache, IsSandbox
 		GrantType:           "client_credential",
 		Cache:               cache,
 		accessTokenCacheKey: fmt.Sprintf("douyin_openapi_access_token_%s", appId),
-		accessTokenLock:     new(sync.Mutex),
+		accessTokenLock:     accessTokenLock,
 		SandBox:             IsSandbox,
 	}
 	return token
