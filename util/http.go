@@ -59,3 +59,28 @@ func JsonStructToMap(content interface{}) (map[string]interface{}, error) {
 	}
 	return name, nil
 }
+
+// PostJsonWithHeader post json 数据请求
+func PostJsonWithHeader(uri string, obj interface{}, header map[string]string) ([]byte, error) {
+	marshal, err := json.Marshal(obj)
+	if err != nil {
+		return nil, err
+	}
+	request, err := http.NewRequest("POST", uri, bytes.NewBuffer(marshal))
+	if err != nil {
+		return nil, err
+	}
+	for k, v := range header {
+		request.Header.Set(k, v)
+	}
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		return nil, err
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("http get error : uri=%v , statusCode=%v", uri, response.StatusCode)
+	}
+	return ioutil.ReadAll(response.Body)
+}

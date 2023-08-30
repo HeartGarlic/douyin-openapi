@@ -3,6 +3,7 @@ package douyin_openapi
 import (
 	"crypto/md5"
 	"crypto/sha1"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	accessToken "github.com/HeartGarlic/douyin-openapi/access-token"
@@ -27,6 +28,10 @@ const (
 	merchantWithdraw     = "https://developer.toutiao.com/api/apps/ecpay/saas/merchant_withdraw"      // 商户提现
 	queryWithdrawOrder   = "https://developer.toutiao.com/api/apps/ecpay/saas/query_withdraw_order"   // 提现结果查询
 	orderV2Push          = "https://developer.toutiao.com/api/apps/order/v2/push"                     // 订单推送
+	imAuthorizeSendMsg   = "https://open.douyin.com/im/authorize/send/msg/"                           // 主动发送私信
+	imAuthorizeRecallMsg = "https://open.douyin.com/im/authorize/recall/msg/"                         // 撤回私信
+	urlLinkGenerate      = "https://developer.toutiao.com/api/apps/url_link/generate"                 // 生成Link
+	imGroupFansList      = "https://open.douyin.com/im/group/fans/list/"                              // 查询群信息
 )
 
 // DouYinOpenApiConfig 实例化配置
@@ -948,6 +953,293 @@ func (d *DouYinOpenApi) OrderV2Push(normal OrderV2PushParams) (orderV2PushRespon
 	}
 	if orderV2PushResponse.ErrCode != 0 {
 		err = fmt.Errorf("OrderV2Push error %s %s", orderV2PushResponse.ErrMsg, orderV2PushResponse.Body)
+		return
+	}
+	return
+}
+
+// UrlLinkGenerateParams urlLinkGenerate
+type UrlLinkGenerateParams struct {
+	AccessToken string `json:"access_token"`    // 接口调用凭证，调用getAccessToken生成的token
+	MaAppID     string `json:"ma_app_id"`       // 小程序ID
+	AppName     string `json:"app_name"`        // 宿主名称，可选 douyin，douyinlite
+	Path        string `json:"path,omitempty"`  // 通过URL Link进入的小程序页面路径，必须是已经发布的小程序存在的页面，不可携带 query。path 为空时会跳转小程序主页。
+	Query       string `json:"query,omitempty"` // 通过URL Link进入小程序时的 query（json形式），若无请填{}。最大1024个字符，只支持数字，大小写英文以及部分特殊字符：`{}!#$&'()*+,/:;=?@-._~%``。
+	ExpireTime  int64  `json:"expire_time"`     // 到期失效的URL Link的失效时间。为 Unix 时间戳，实际失效时间为距离当前时间小时数，向上取整。最长间隔天数为180天。
+}
+
+// UrlLinkGenerateResponse urlLinkGenerate 返回值
+type UrlLinkGenerateResponse struct {
+	ErrNo   int    `json:"err_no"`
+	ErrTips string `json:"err_tips"`
+	UrlLink string `json:"url_link"`
+}
+
+// UrlLinkGenerate urlLinkGenerate
+func (d *DouYinOpenApi) UrlLinkGenerate(params UrlLinkGenerateParams) (urlLinkGenerateResponse UrlLinkGenerateResponse, err error) {
+	params.AccessToken, err = d.Config.AccessToken.GetAccessToken()
+	if err != nil {
+		return
+	}
+	err = d.PostJson(urlLinkGenerate, params, &urlLinkGenerateResponse)
+	if err != nil {
+		return
+	}
+	if urlLinkGenerateResponse.ErrNo != 0 {
+		err = fmt.Errorf("urlLinkGenerateResponse error %s %d", urlLinkGenerateResponse.ErrTips, urlLinkGenerateResponse.ErrNo)
+		return
+	}
+	return
+}
+
+// PostJsonWithHeader 封装公共的请求方法
+func (d *DouYinOpenApi) PostJsonWithHeader(api string, params interface{}, response interface{}, header map[string]string) (err error) {
+	body, err := util.PostJsonWithHeader(api, params, header)
+	if err != nil {
+		return
+	}
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return
+	}
+	return
+}
+
+// MsgTypeText 1 文本 2 图片 3 视频 9 群邀请卡片 4 文字/图片/电话拨打卡片 10 小程序卡片
+const (
+	MsgTypeText       = 1
+	MsgTypeImage      = 2
+	MsgTypeVideo      = 3
+	MsgTypeGroup      = 9
+	MsgTypeCard       = 4
+	MsgTypeAppletCard = 10
+)
+
+// TextContent 文本消息内容
+type TextContent struct {
+	MsgType int `json:"msg_type"` // 消息类型：1 - 文本消息
+	Text    struct {
+		Text string `json:"text"` // 文本内容
+	} `json:"text"` // 文本内容
+}
+
+// ImageContent 图片消息内容
+type ImageContent struct {
+	MsgType int `json:"msg_type"` // 消息类型：2 - 图片消息
+	Image   struct {
+		MediaID string `json:"media_id"` // 图片ID
+	} `json:"image"` // 图篇内容
+}
+
+// VideoContent 视频消息内容
+type VideoContent struct {
+	MsgType int `json:"msg_type"` // 消息类型：3 - 视频消息
+	Video   struct {
+		ItemID string `json:"item_id"` // 视频ID
+	} `json:"video"` // 视频内容
+}
+
+// GroupInvitationContent 群邀请卡片消息内容
+type GroupInvitationContent struct {
+	MsgType         int `json:"msg_type"` // 消息类型：3 - 视频消息
+	GroupInvitation struct {
+		GroupID string `json:"group_id"` // 群ID
+	} `json:"group_invitation"`
+}
+
+// CardContent 文字/图片/电话拨打卡片消息内容
+type CardContent struct {
+	MsgType int `json:"msg_type"` // 消息类型：4 - 文字/图片/电话拨打卡片
+	Card    struct {
+		CardId string `json:"card_id"`
+	} `json:"card"`
+}
+
+// AppletCardContent 小程序卡片消息内容
+type AppletCardContent struct {
+	MsgType    int `json:"msg_type"` // 消息类型：10 - 小程序卡片
+	AppletCard struct {
+		CardTemplateId string `json:"card_template_id,omitempty"`
+		Path           string `json:"path,omitempty"`
+		Query          string `json:"query,omitempty"`
+		AppId          string `json:"app_id,omitempty"`
+		Schema         string `json:"schema,omitempty"`
+	} `json:"applet_card"`
+}
+
+// ImAuthorizeSendMsgParams 主动发送私信参数
+type ImAuthorizeSendMsgParams struct {
+	ToUserId string      `json:"to_user_id,omitempty"`
+	Content  interface{} `json:"content,omitempty"`
+}
+
+// ImAuthorizeSendMsgResponse 发送消息返回值
+type ImAuthorizeSendMsgResponse struct {
+	ErrNo  int    `json:"err_no"`
+	ErrMsg string `json:"err_msg"`
+	Data   struct {
+		MsgId string `json:"msg_id"`
+	} `json:"data"`
+	LogId string `json:"log_id"`
+}
+
+// SendPrivateMessage 主动发送私信
+func (d *DouYinOpenApi) SendPrivateMessage(openId string, params ImAuthorizeSendMsgParams) (sendMsgResponse ImAuthorizeSendMsgResponse, err error) {
+	token, err := d.Config.AccessToken.GetAccessToken()
+	if err != nil {
+		return
+	}
+	err = d.PostJsonWithHeader(fmt.Sprintf("%s?open_id=%s", imAuthorizeSendMsg, openId), params, &sendMsgResponse, map[string]string{
+		"Content-Type": "application/json",
+		"access-token": token,
+	})
+	if err != nil {
+		return
+	}
+	if sendMsgResponse.ErrNo != 0 {
+		err = fmt.Errorf("SendMsg error %s %d", sendMsgResponse.ErrMsg, sendMsgResponse.ErrNo)
+		return
+	}
+	return
+}
+
+// ImAuthorizeRecallMsgParams 撤回私信消息参数
+type ImAuthorizeRecallMsgParams struct {
+	MsgId          string `json:"msg_id"`
+	ConversationId string `json:"conversation_id"`
+}
+
+// ImAuthorizeRecallMsgResponse 撤回私信消息返回值
+type ImAuthorizeRecallMsgResponse struct {
+	ErrNo  int    `json:"err_no"`
+	ErrMsg string `json:"err_msg"`
+	LogId  string `json:"log_id"`
+}
+
+// RecallPrivateMessage 撤回私信消息
+func (d *DouYinOpenApi) RecallPrivateMessage(openId string, params ImAuthorizeRecallMsgParams) (recallMsgResponse ImAuthorizeRecallMsgResponse, err error) {
+	token, err := d.Config.AccessToken.GetAccessToken()
+	if err != nil {
+		return
+	}
+	err = d.PostJsonWithHeader(fmt.Sprintf("%s?open_id=%s", imAuthorizeRecallMsg, openId), params, &recallMsgResponse, map[string]string{
+		"Content-Type": "application/json",
+		"access-token": token,
+	})
+	if err != nil {
+		return
+	}
+	if recallMsgResponse.ErrNo != 0 {
+		err = fmt.Errorf("RecallMsg error %s %d", recallMsgResponse.ErrMsg, recallMsgResponse.ErrNo)
+		return
+	}
+	return
+}
+
+// imGroupFansListResponse 查询群信息返回值
+type imGroupFansListResponse struct {
+}
+
+// WebHookResponse webHook回调返回值
+type WebHookResponse struct {
+	ErrNo   int    `json:"err_no"`
+	ErrTips string `json:"err_tips"`
+}
+
+// WebHookBody webHook回调body
+type WebHookBody struct {
+	Event                string                          `json:"event"`
+	ClientKey            string                          `json:"client_key"`
+	FromUserId           string                          `json:"from_user_id"`
+	ToUserId             string                          `json:"to_user_id"`
+	Content              string                          `json:"content"`
+	VerifyWebhookContent VerifyWebhook                   `json:"verify_webhook_content,omitempty"`
+	ImAuthorizeContent   EventImAuthorize                `json:"im_authorize_content,omitempty"`
+	MsgCallbackContent   EventImAuthorizeMessageCallback `json:"msg_callback_content,omitempty"`
+}
+
+// EventImAuthorize 主动授权事件订阅
+type EventImAuthorize struct {
+	CreateTime    int    `json:"create_time"`
+	ExpireTime    int    `json:"expire_time"`
+	UpdateTime    int    `json:"update_time"`
+	OperationType int    `json:"operation_type"`
+	AuthStatus    int    `json:"auth_status"`
+	Source        string `json:"source"`
+	Extra         string `json:"extra"`
+	LogId         string `json:"log_id"`
+}
+
+// EventImAuthorizeMessageCallback 主动私信发送回调
+type EventImAuthorizeMessageCallback struct {
+	ConversationShortId string    `json:"conversation_short_id"`
+	ServerMessageId     string    `json:"server_message_id"`
+	ConversationType    int       `json:"conversation_type"`
+	CreateTime          int64     `json:"create_time"`
+	MessageType         string    `json:"message_type"`
+	Text                string    `json:"text"`
+	Image               string    `json:"image"`
+	ItemId              string    `json:"item_id"`
+	Content             string    `json:"content"`
+	Title               string    `json:"title"`
+	Actions             string    `json:"actions"`
+	UserInfos           UserInfos `json:"user_infos"`
+}
+
+// UserInfos 用户信息
+type UserInfos struct {
+	OpenId   string `json:"open_id"`
+	NickName string `json:"nick_name"`
+	Avatar   string `json:"avatar"`
+}
+
+// VerifyWebhook 验证接口
+type VerifyWebhook struct {
+	Challenge int `json:"challenge"`
+}
+
+// generateSignature
+func (d *DouYinOpenApi) generateSignature(body string) (signature string) {
+	h := sha1.New()
+	h.Write([]byte(d.Config.AppSecret))
+	h.Write([]byte(body))
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+// HandleWebHook 延签 + 解析返回值
+func (d *DouYinOpenApi) HandleWebHook(xDouyinSignature, body string, checkSign bool) (webHookBody WebHookBody, err error) {
+	if checkSign == true && d.generateSignature(body) != xDouyinSignature {
+		err = fmt.Errorf("signature error new: %s old: %s", d.generateSignature(body), xDouyinSignature)
+		return
+	}
+	err = json.Unmarshal([]byte(body), &webHookBody)
+	if err != nil {
+		return
+	}
+	switch webHookBody.Event {
+	case "verify_webhook":
+		var verifyWebhook VerifyWebhook
+		err = json.Unmarshal([]byte(webHookBody.Content), &verifyWebhook)
+		if err != nil {
+			return
+		}
+		webHookBody.VerifyWebhookContent = verifyWebhook
+	case "im_authorize":
+		var eventImAuthorize EventImAuthorize
+		err = json.Unmarshal([]byte(webHookBody.Content), &eventImAuthorize)
+		if err != nil {
+			return
+		}
+		webHookBody.ImAuthorizeContent = eventImAuthorize
+	case "im_authorize_message_callback":
+		var eventImAuthorizeMessageCallback EventImAuthorizeMessageCallback
+		err = json.Unmarshal([]byte(webHookBody.Content), &eventImAuthorizeMessageCallback)
+		if err != nil {
+			return
+		}
+		webHookBody.MsgCallbackContent = eventImAuthorizeMessageCallback
+	default:
+		err = fmt.Errorf("event %s not support", webHookBody.Event)
 		return
 	}
 	return
