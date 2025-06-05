@@ -46,8 +46,39 @@ type DouYinOpenApi struct {
 	BaseApi string
 }
 
+// Option defines a function which configures DouYinOpenApiConfig.
+type Option func(*DouYinOpenApiConfig)
+
+// WithCache sets a custom cache implementation.
+func WithCache(c cache.Cache) Option {
+	return func(cfg *DouYinOpenApiConfig) { cfg.Cache = c }
+}
+
+// WithAccessToken sets a custom AccessToken implementation.
+func WithAccessToken(at accessToken.AccessToken) Option {
+	return func(cfg *DouYinOpenApiConfig) { cfg.AccessToken = at }
+}
+
+// WithSandbox enables sandbox mode.
+func WithSandbox() Option { return func(cfg *DouYinOpenApiConfig) { cfg.IsSandbox = true } }
+
+// WithToken sets callback token.
+func WithToken(token string) Option { return func(cfg *DouYinOpenApiConfig) { cfg.Token = token } }
+
+// WithSalt sets sign salt.
+func WithSalt(salt string) Option { return func(cfg *DouYinOpenApiConfig) { cfg.Salt = salt } }
+
 // NewDouYinOpenApi 实例化一个抖音openapi实例
-func NewDouYinOpenApi(config DouYinOpenApiConfig) *DouYinOpenApi {
+func NewDouYinOpenApi(appId, appSecret string, opts ...Option) *DouYinOpenApi {
+	config := DouYinOpenApiConfig{AppId: appId, AppSecret: appSecret}
+	for _, opt := range opts {
+		opt(&config)
+	}
+	return newDouYinOpenApi(config)
+}
+
+// newDouYinOpenApi creates DouYinOpenApi instance based on config.
+func newDouYinOpenApi(config DouYinOpenApiConfig) *DouYinOpenApi {
 	if config.Cache == nil {
 		config.Cache = cache.NewMemory()
 	}
