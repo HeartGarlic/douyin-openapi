@@ -21,8 +21,8 @@ type data struct {
 
 // Memory 实现一个内存缓存
 type Memory struct {
-	sync.Mutex // 读写锁
-	data       map[string]*data
+	sync.RWMutex // 读写锁
+	data         map[string]*data
 }
 
 // NewMemory 实例化一个内存缓存器
@@ -34,10 +34,11 @@ func NewMemory() Cache {
 
 // Get 获取缓存的值
 func (mem *Memory) Get(key string) interface{} {
-	if val, ok := mem.data[key]; ok {
-		// 判断缓存是否过期
+	mem.RLock()
+	val, ok := mem.data[key]
+	mem.RUnlock()
+	if ok {
 		if val.Expired.Before(time.Now()) {
-			// 删除这个key
 			mem.deleteKey(key)
 			return nil
 		}
@@ -59,7 +60,10 @@ func (mem *Memory) Set(key string, val interface{}, timeout time.Duration) error
 
 // IsExist 判断值是否存在
 func (mem *Memory) IsExist(key string) bool {
-	if val, ok := mem.data[key]; ok {
+	mem.RLock()
+	val, ok := mem.data[key]
+	mem.RUnlock()
+	if ok {
 		if val.Expired.Before(time.Now()) {
 			return false
 		}

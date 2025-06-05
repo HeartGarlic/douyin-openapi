@@ -28,13 +28,10 @@ var OpenApi *DouYinOpenApi
 
 func init() {
 	Cache = cache.NewMemory()
-	OpenApi = NewDouYinOpenApi(DouYinOpenApiConfig{
-		AppId:     AppId,
-		AppSecret: AppSecret,
-		IsSandbox: false,
-		Token:     Token,
-		Salt:      Salt,
-	})
+	OpenApi = NewDouYinOpenApi(AppId, AppSecret,
+		WithCache(Cache),
+		WithToken(Token),
+		WithSalt(Salt))
 }
 
 // 不足位数补零
